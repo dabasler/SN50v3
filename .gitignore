@@ -59,3 +59,7 @@
 
 *.axf
 *.crf
+
+/tools/toolchain
+/tools/uploadTool
+/tools/info

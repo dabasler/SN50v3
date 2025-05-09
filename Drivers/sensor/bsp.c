@@ -16,6 +16,7 @@
 #include "ult.h"
 #include "pwm.h"
 #include "TMP117_I2C.h"
+#include "ltc2485.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -191,6 +192,30 @@ void BSP_sensor_Init( void  )
 	 {
 		 GPIO_EXTI15_IoInit(inmode3);
 	 }
+	 
+	 // ********************************************************************************
+	 if((workmode==101)||(workmode==102)){
+	    
+		ltc2485_init(); // Defines Pins and setx VX low		
+		I2C_GPIO_MODE_Config();
+		if(check_ltc2485_connect()==1)
+		 {
+			 flags=1;
+			 	 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is LTC2485\r\n");
+			 delay_ms(20);
+		 }
+		 
+		 if(flags==0)
+		 {
+			 LOG_PRINTF(LL_DEBUG,"\n\rNo I2C device detected\r\n");
+			 delay_ms(20);
+		 }	 
+     I2C_GPIO_MODE_ANALOG();	
+
+
+
+	 }
+	 // ********************************************************************************
 	 
 	 POWER_IoDeInit();	
 	 GPIO_BLE_STATUS_Ioinit();
@@ -464,6 +489,13 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 		sensor_data->ADC_4=ADC_Read(1,message);
 		sensor_data->in1=Digital_input_Read(3,message);
 		sensor_data->exit_pa8=Digital_input_Read(2,message);		
+	}	
+  if(mod_temp==101)
+	{
+		bool ok;
+		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
+		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
+
 	}		
   POWER_IoDeInit();	
 }

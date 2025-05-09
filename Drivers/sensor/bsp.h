@@ -116,6 +116,10 @@ typedef struct{
 	uint16_t pwm_duty;
 	
   /**more may be added*/
+  
+   //added by DB2025 -
+   uint32_t ADC_ext_24bit;
+  
 } sensor_t;
 
 /* Exported constants --------------------------------------------------------*/
