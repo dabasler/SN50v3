@@ -399,6 +399,19 @@ void I2C_read_data(sensor_t *sensor_data,uint8_t flag_temp, uint8_t message)
 			LOG_PRINTF(LL_DEBUG,"BH1750_lum:%d\r\n",sensor_data->illuminance);	
       delay_ms(20);			
 		}				
+	}
+	else if(flag_temp == 4)
+	{
+		sht31_t temphum_data;
+		SHT40_Read(&temphum_data);
+		sensor_data->temp_sht = temphum_data.temp_sht;
+		sensor_data->hum_sht  = temphum_data.hum_sht;
+
+		if(message == 1)
+		{
+			LOG_PRINTF(LL_DEBUG,"SHT40_temp:%.1f,SHT40_hum:%.1f\r\n",sensor_data->temp_sht, sensor_data->hum_sht);
+			delay_ms(20);
+		}
 	}		
   I2C_GPIO_MODE_ANALOG();	
 }
@@ -471,4 +484,122 @@ uint16_t waitbusy(uint8_t mode)
   }
 	return busyCounter;	
 }
+
+
+
+uint8_t SHT40_CheckSum_CRC8(uint8_t* data)
+{
+    uint8_t crc = 0xFF;
+    uint32_t POLYNOMIAL = 0x31;
+
+    for (uint8_t i = 0; i < 2; i++)
+    {
+        crc ^= data[i];
+        for (uint8_t bit = 0; bit < 8; bit++)
+        {
+            if (crc & 0x80)
+                crc = (crc << 1) ^ POLYNOMIAL;
+            else
+                crc <<= 1;
+        }
+    }
+
+    return crc;
+}
+
+
+
+void SHT40_Read(sht31_t *sht40_data)
+{
+    uint8_t txdata[1] = {0xFD}; // High-precision measurement command
+    uint8_t rxdata[6];
+    bool read_status = 1;
+    uint8_t check_number = 0;
+
+    I2C_GPIO_MODE_Config();
+
+    // Send measurement command
+    do
+    {
+        read_status = 1;
+        check_number++;
+        if (I2C_Write_Len(0x44, 0x01, 1, txdata) == 1)
+        {
+            read_status = 0;
+            delay_ms(20);
+        }
+    } while (read_status == 0 && check_number < 4);
+
+    // Wait and read data
+    if (read_status == 1)
+    {
+        delay_ms(10);
+        check_number = 0;
+        do
+        {
+            read_status = 1;
+            check_number++;
+            if (I2C_Read_Len(0x44, 0x01, 6, rxdata) == 1)
+            {
+                read_status = 0;
+                delay_ms(20);
+            }
+
+            if (SHT40_CheckSum_CRC8(rxdata) != rxdata[2] || SHT40_CheckSum_CRC8(&rxdata[3]) != rxdata[5])
+            {
+                read_status = 0;
+                delay_ms(20);
+            }
+        } while (read_status == 0 && check_number < 4);
+    }
+
+    // Convert if success
+    if (read_status == 1)
+    {
+        uint16_t raw_temp = (rxdata[0] << 8) + rxdata[1];
+        uint16_t raw_hum = (rxdata[3] << 8) + rxdata[4];
+
+        sht40_data->temp_sht = -45.0 + 175.0 * ((float)raw_temp / 65535.0);
+        sht40_data->hum_sht = 100.0 * ((float)raw_hum / 65535.0);
+
+        // Clamp values
+        if (sht40_data->hum_sht > 100)
+            sht40_data->hum_sht = 100;
+        else if (sht40_data->hum_sht < 0)
+            sht40_data->hum_sht = 0;
+
+        if (sht40_data->temp_sht > 125)
+            sht40_data->temp_sht = 125;
+        else if (sht40_data->temp_sht < -40)
+            sht40_data->temp_sht = -40;
+    }
+    else
+    {
+        sht40_data->temp_sht = 3276.7;
+        sht40_data->hum_sht = 6553.5;
+    }
+}
+
+
+uint8_t check_sht40_connect(void)
+{
+    uint8_t txdata[1] = {0xFD}; // High-precision measurement command
+    uint8_t rxdata[6];
+
+    I2C_GPIO_MODE_Config();
+    I2C_Write_Len(0x44, 0x01, 1, txdata);
+    delay_ms(10);
+    I2C_Read_Len(0x44, 0x01, 6, rxdata);
+
+    if (SHT40_CheckSum_CRC8(rxdata) == rxdata[2] && SHT40_CheckSum_CRC8(&rxdata[3]) == rxdata[5])
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/

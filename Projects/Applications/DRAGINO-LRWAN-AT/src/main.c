@@ -937,7 +937,7 @@ static void Send( void )
 
   //*****************  LT2485 I2C extension boards *****************  
   // CUSTOM I2C Board using a ltc2485 ()
-  else if(workmode==101)
+  else if(workmode==101 || workmode==102)
 	{		
 		AppData.Buff[i++] =(bsp_sensor_data_buff.bat_mv>>8);       
 		AppData.Buff[i++] = bsp_sensor_data_buff.bat_mv & 0xFF;
@@ -946,37 +946,49 @@ static void Send( void )
 		AppData.Buff[i++] =(bsp_sensor_data_buff.ADC_ext_24bit>>16);       
 		AppData.Buff[i++] =(bsp_sensor_data_buff.ADC_ext_24bit>>8);       
 		AppData.Buff[i++] = bsp_sensor_data_buff.ADC_ext_24bit & 0xFF;
+		
 		AppData.Buff[i++]=(int)(bsp_sensor_data_buff.temp1*10)>>8;     
 		AppData.Buff[i++]=(int)(bsp_sensor_data_buff.temp1*10);
-		//For rev1: add Memory Position
-		//For external I2C Add RGB and TEMP RH Here
+
 		AppData.Buff[i++] = 0x00;   
 		AppData.Buff[i++] = 0x00; 
+		
 		AppData.Buff[i++] = 0x00;   
 		AppData.Buff[i++] = 0x00; //11 Byte Payload
  
 	}
 
-
-  // CUSTOM I2C Board using a ltc2485 and Memory ()
-  else if(workmode==102)
-	{		
-
-	}
-
-
   // CUSTOM external I2C Board with ltc2485/SHT40/RGB
-  else if(workmode==111)
+  else if(workmode==111 || workmode==112)
 	{		
+		AppData.Buff[i++] =(bsp_sensor_data_buff.bat_mv>>8);       
+		AppData.Buff[i++] = bsp_sensor_data_buff.bat_mv & 0xFF;		
+	    
+		//We add raw int32_t from the 24 bit LTC2485 ADC
+		AppData.Buff[i++] =(bsp_sensor_data_buff.ADC_ext_24bit>>16);       
+		AppData.Buff[i++] =(bsp_sensor_data_buff.ADC_ext_24bit>>8);       
+		AppData.Buff[i++] = bsp_sensor_data_buff.ADC_ext_24bit & 0xFF;
 
+		AppData.Buff[i++] =(int)(bsp_sensor_data_buff.temp_sht*10)>>8;      
+		AppData.Buff[i++] =(int)(bsp_sensor_data_buff.temp_sht*10);
+		
+		AppData.Buff[i++] =(int)(bsp_sensor_data_buff.hum_sht*10)>>8;   
+		AppData.Buff[i++] =(int)(bsp_sensor_data_buff.hum_sht*10);
+		
+		AppData.Buff[i++] = 0x00;   
+		AppData.Buff[i++] = 0x00; //11 Byte Payload
+		
+		//AppData.Buff[i++] = 0x00;   
+		//AppData.Buff[i++] = 0x00; //11 Byte Payload
+
+		//AppData.Buff[i++] = 0x00;   
+		//AppData.Buff[i++] = 0x00; //11 Byte Payload
+
+		//AppData.Buff[i++] = 0x00;   
+		//AppData.Buff[i++] = 0x00; //11 Byte Payload
+
+		
 	}
-
-// CUSTOM external I2C Board with ltc2485/SHT40/RGB & Memory
-  else if(workmode==112)
-	{		
-
-	}
-
 	
   AppData.BuffSize = i;
 	payloadlens=i;

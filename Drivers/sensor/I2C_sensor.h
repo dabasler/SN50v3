@@ -101,6 +101,9 @@ typedef struct{
 uint8_t SHT31_CheckSum_CRC8(uint8_t* Result,uint8_t num);
 void SHT31_Read(sht31_t *sht31_data);
 uint8_t check_sht31_connect(void);
+uint8_t SHT40_CheckSum_CRC8(uint8_t* data);
+void SHT40_Read(sht31_t *sht40_data);
+uint8_t check_sht40_connect(void);
 uint8_t SHT20_CheckSum_CRC8(uint8_t* Result);
 float SHT20_RH(void);
 float SHT20_RT(void);

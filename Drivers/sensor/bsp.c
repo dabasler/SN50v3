@@ -205,6 +205,8 @@ void BSP_sensor_Init( void  )
 			 delay_ms(20);
 		 }
 		 
+		 // Add Memory here
+		 
 		 if(flags==0)
 		 {
 			 LOG_PRINTF(LL_DEBUG,"\n\rNo I2C device detected\r\n");
@@ -212,6 +214,33 @@ void BSP_sensor_Init( void  )
 		 }	 
      I2C_GPIO_MODE_ANALOG();	
 
+	 }
+	
+	if((workmode==111)||(workmode==112)){
+
+	I2C_GPIO_MODE_Config();
+		if(check_ltc2485_connect()==1)
+		 {
+			 flags=1;
+			 	 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is LTC2485\r\n");
+			 delay_ms(20);
+		 }
+		 		 
+		 if(check_sht40_connect()==1)
+		 {
+			 flags=4;
+			 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is STH4x\r\n");
+			 delay_ms(20);
+		 }
+		 
+		 // Add light sensor here
+		 // Add Memory here
+		 
+		 if(flags==0)
+		 {
+			 LOG_PRINTF(LL_DEBUG,"\n\rNo I2C device detected\r\n");
+			 delay_ms(20);
+		 }
 
 
 	 }
@@ -255,7 +284,7 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
   if(mod_temp==1)
 	{
 		sensor_data->temp1=DS18B20_Read(1,message);
-    I2C_read_data(sensor_data,flags,message);
+        I2C_read_data(sensor_data,flags,message);
 		POWER_open_time(power_5v_time);
 		sensor_data->ADC_4=ADC_Read(1,message);
 		sensor_data->in1=Digital_input_Read(3,message);
@@ -497,6 +526,15 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
 
 	}		
+   if(mod_temp==111)
+	{
+		bool ok;
+		I2C_read_data(sensor_data,flags,message);
+		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
+		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
+
+	}		
+
   POWER_IoDeInit();	
 }
 
