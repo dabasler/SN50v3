@@ -937,7 +937,7 @@ static void Send( void )
 
   //*****************  LT2485 I2C extension boards *****************  
   // CUSTOM I2C Board using a ltc2485 ()
-  else if(workmode==101 || workmode==102)
+  else if(workmode==101)
 	{		
 		AppData.Buff[i++] =(bsp_sensor_data_buff.bat_mv>>8);       
 		AppData.Buff[i++] = bsp_sensor_data_buff.bat_mv & 0xFF;
@@ -950,7 +950,7 @@ static void Send( void )
 		AppData.Buff[i++]=(int)(bsp_sensor_data_buff.temp1*10)>>8;     
 		AppData.Buff[i++]=(int)(bsp_sensor_data_buff.temp1*10);
 
-		AppData.Buff[i++] = 0x00;   
+		AppData.Buff[i++] = 0x00; //7 Byte required  
 		AppData.Buff[i++] = 0x00; 
 		
 		AppData.Buff[i++] = 0x00;   
@@ -959,12 +959,11 @@ static void Send( void )
 	}
 
   // CUSTOM external I2C Board with ltc2485/SHT40/RGB
-  else if(workmode==111 || workmode==112)
+  else if(workmode==102) //17 Byte payload!
 	{		
 		AppData.Buff[i++] =(bsp_sensor_data_buff.bat_mv>>8);       
 		AppData.Buff[i++] = bsp_sensor_data_buff.bat_mv & 0xFF;		
-	    
-		//We add raw int32_t from the 24 bit LTC2485 ADC
+	   
 		AppData.Buff[i++] =(bsp_sensor_data_buff.ADC_ext_24bit>>16);       
 		AppData.Buff[i++] =(bsp_sensor_data_buff.ADC_ext_24bit>>8);       
 		AppData.Buff[i++] = bsp_sensor_data_buff.ADC_ext_24bit & 0xFF;
@@ -975,18 +974,14 @@ static void Send( void )
 		AppData.Buff[i++] =(int)(bsp_sensor_data_buff.hum_sht*10)>>8;   
 		AppData.Buff[i++] =(int)(bsp_sensor_data_buff.hum_sht*10);
 		
-		AppData.Buff[i++] = 0x00;   
-		AppData.Buff[i++] = 0x00; //11 Byte Payload
-		
-		//AppData.Buff[i++] = 0x00;   
-		//AppData.Buff[i++] = 0x00; //11 Byte Payload
-
-		//AppData.Buff[i++] = 0x00;   
-		//AppData.Buff[i++] = 0x00; //11 Byte Payload
-
-		//AppData.Buff[i++] = 0x00;   
-		//AppData.Buff[i++] = 0x00; //11 Byte Payload
-
+		AppData.Buff[i++] = (bsp_sensor_data_buff.RGBIR >> 56) & 0xFF; // Byte 7 (MSB)
+		AppData.Buff[i++] = (bsp_sensor_data_buff.RGBIR >> 48) & 0xFF; // Byte 6
+		AppData.Buff[i++] = (bsp_sensor_data_buff.RGBIR >> 40) & 0xFF; // Byte 5
+		AppData.Buff[i++] = (bsp_sensor_data_buff.RGBIR >> 32) & 0xFF; // Byte 4
+		AppData.Buff[i++] = (bsp_sensor_data_buff.RGBIR >> 24) & 0xFF; // Byte 3
+		AppData.Buff[i++] = (bsp_sensor_data_buff.RGBIR >> 16) & 0xFF; // Byte 2
+		AppData.Buff[i++] = (bsp_sensor_data_buff.RGBIR >> 8)  & 0xFF; // Byte 1
+		AppData.Buff[i++] =  bsp_sensor_data_buff.RGBIR        & 0xFF; // Byte 0 (LSB)
 		
 	}
 	

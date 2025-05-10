@@ -119,6 +119,7 @@ typedef struct{
   
    //added by DB2025 -
    uint32_t ADC_ext_24bit;
+   uint64_t RGBIR;
   
 } sensor_t;
 

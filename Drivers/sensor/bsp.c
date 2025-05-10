@@ -17,6 +17,7 @@
 #include "pwm.h"
 #include "TMP117_I2C.h"
 #include "ltc2485.h"
+#include "apds9250.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -194,7 +195,7 @@ void BSP_sensor_Init( void  )
 	 }
 	 
 	 // ********************************************************************************
-	 if((workmode==101)||(workmode==102)){
+	 if(workmode==101){
 	    
 		ltc2485_init(); // Defines Pins and setx VX low		
 		I2C_GPIO_MODE_Config();
@@ -216,25 +217,31 @@ void BSP_sensor_Init( void  )
 
 	 }
 	
-	if((workmode==111)||(workmode==112)){
+	if(workmode==102){
 
 	I2C_GPIO_MODE_Config();
 		if(check_ltc2485_connect()==1)
 		 {
 			 flags=1;
-			 	 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is LTC2485\r\n");
+			 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is LTC2485\r\n");
 			 delay_ms(20);
 		 }
 		 		 
 		 if(check_sht40_connect()==1)
-		 {
-			 flags=4;
+		 { 
+			 flags=1;
 			 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is STH4x\r\n");
 			 delay_ms(20);
 		 }
 		 
-		 // Add light sensor here
-		 // Add Memory here
+		 if(check_apds9250_connect()==1)
+		 {
+		     flags=1;
+			 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is ADPS9250\r\n");
+			 delay_ms(20);
+		 }
+		 
+		 // Add Memory here (set flat=2 iv available)
 		 
 		 if(flags==0)
 		 {
@@ -519,21 +526,28 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 		sensor_data->in1=Digital_input_Read(3,message);
 		sensor_data->exit_pa8=Digital_input_Read(2,message);		
 	}	
-  if(mod_temp==101)
+  if(mod_temp==101) // Internal I2C ACD Extension
 	{
 		bool ok;
 		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
 		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
+		if (flags==2) {// There is a memory chip on board
+		    //save data
+		}
 
 	}		
-   if(mod_temp==111)
+   if(mod_temp==111) // External I2C sensor Board (incl RH/T and RGBIR)
 	{
 		bool ok;
-		I2C_read_data(sensor_data,flags,message);
+		I2C_read_data(sensor_data,4,message); // 4 is the SHT4x flag
 		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
 		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
+		sensor_data->RGBIR=apds9250_measure(200, &ok);
+		if (flags==2) {// There is a memory chip on board
+		    //save data
+		}
 
-	}		
+	}
 
   POWER_IoDeInit();	
 }
