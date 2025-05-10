@@ -60,7 +60,7 @@ static void apds9250_adjust_gain(uint32_t r, uint32_t g, uint32_t b, uint32_t ir
 }
 
 bool apds9250_init(void) {
-    I2C_GPIO_MODE_Config();
+    //I2C_GPIO_MODE_Config();
 
     uint8_t ctrl = 0x02;
     if (I2C_Write_reg_Len(APDS9250_I2C_ADDR, MAIN_CTRL_REG, 1, &ctrl) != 0)
@@ -78,7 +78,7 @@ bool apds9250_init(void) {
 
 uint8_t check_apds9250_connect(void) {
     uint8_t part_id;
-    I2C_GPIO_MODE_Config();
+    //I2C_GPIO_MODE_Config();
     if (I2C_Read_reg_Len(APDS9250_I2C_ADDR, PART_ID_REG, 1, &part_id) != 0)
         return 0;
     return (part_id == 0xB5) ? 1 : 0;

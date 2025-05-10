@@ -545,9 +545,11 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
   if(mod_temp==101) // Internal I2C ACD Extension
 	{
 		bool ok;
-		
+		ltc2485_set_vx(true);        // VX Power on
+		delay_ms(40);                // Allow analog input and reference to settle
 		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
 		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
+		ltc2485_set_vx(false);       // Always power off after attempt
 		if (flags==2) {
 			// If there is a memory chip on board, write the datapackage to the memory
 			uint8_t mempacked_data[WORKMODE_101_RECORD];	
@@ -563,6 +565,9 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 	}		
    if(mod_temp==111) // External I2C sensor Board (incl RH/T and RGBIR)
 	{
+	
+		ltc2485_set_vx(true);        // this enables the full powersupply of the external board incl. VX
+		delay_ms(100);               // Allow analog input and reference to settle
 		bool ok;
 		I2C_read_data(sensor_data,4,message); // 4 is the SHT4x flag
 		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
@@ -577,9 +582,7 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 			} else {
 				LOG_PRINTF(LL_ERR, "Record write failed\r\n");
 			}
-
-			
-			
+			ltc2485_set_vx(false);        // Switch off external sensor board
 		}
 
 	}

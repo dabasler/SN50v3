@@ -10,13 +10,13 @@ static uint8_t calc_device_addr(uint32_t addr) {
 }
 
 bool m24m02e_init(void) {
-    I2C_GPIO_MODE_Config();
+    //I2C_GPIO_MODE_Config();
     return true;
 }
 
 uint8_t check_m24m02e_connect(void) {
     uint8_t test;
-    I2C_GPIO_MODE_Config();
+    //I2C_GPIO_MODE_Config();
     return m24m02e_read(0x000000, &test, 1) ? 1 : 0;
 }
 
@@ -56,7 +56,7 @@ bool m24m02e_write(uint32_t mem_addr, const uint8_t* data, uint16_t len) {
 }
 
 bool m24m02e_sleep(void) {
-    I2C_GPIO_MODE_ANALOG();  // Optional: put bus in high-Z if needed
+    //I2C_GPIO_MODE_ANALOG();  // Optional: put bus in high-Z if needed
     return true;
 }
 
