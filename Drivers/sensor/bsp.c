@@ -18,6 +18,8 @@
 #include "TMP117_I2C.h"
 #include "ltc2485.h"
 #include "apds9250.h"
+#include "m24m02e.h"
+#include "eeprom_record.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -43,6 +45,7 @@ extern uint32_t count1,count2;
 extern uint8_t pwm_timer;
 extern uint16_t IC1[4],IC2[4];
 static float tmp117_temp_record=10;
+
 
 void BLE_power_Init(void)
 {
@@ -206,7 +209,13 @@ void BSP_sensor_Init( void  )
 			 delay_ms(20);
 		 }
 		 
-		 // Add Memory here
+		 if(check_m24m02e_connect()==1)
+		 {
+		     flags=2; //Memory is present
+			 LOG_PRINTF(LL_DEBUG,"\n\rMemory is present\r\n");
+			 eeprom_record_init(WORKMODE_101_RECORD, BASE_ADDRESS);	// Find first/last record		 			 
+			 delay_ms(20);
+		 }
 		 
 		 if(flags==0)
 		 {
@@ -240,8 +249,15 @@ void BSP_sensor_Init( void  )
 			 LOG_PRINTF(LL_DEBUG,"\n\rUse Sensor is ADPS9250\r\n");
 			 delay_ms(20);
 		 }
+
+		 if(check_m24m02e_connect()==1)
+		 {
+		     flags=2; //Memory is present
+			 LOG_PRINTF(LL_DEBUG,"\n\rMemory is present\r\n");
+			 eeprom_record_init(WORKMODE_102_RECORD, BASE_ADDRESS);		// Find first/last record		 			 	 			 
+			 delay_ms(20);
+		 }
 		 
-		 // Add Memory here (set flat=2 iv available)
 		 
 		 if(flags==0)
 		 {
@@ -529,10 +545,19 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
   if(mod_temp==101) // Internal I2C ACD Extension
 	{
 		bool ok;
+		
 		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
 		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
-		if (flags==2) {// There is a memory chip on board
-		    //save data
+		if (flags==2) {
+			// If there is a memory chip on board, write the datapackage to the memory
+			uint8_t mempacked_data[WORKMODE_101_RECORD];	
+			pack_sensor_record_7byte(sensor_data, mempacked_data);
+			if (eeprom_record_write(mempacked_data)) {
+				LOG_PRINTF(LL_DEBUG, "Record written\r\n");
+			} else {
+				LOG_PRINTF(LL_ERR, "Record write failed\r\n");
+			}
+
 		}
 
 	}		
@@ -544,7 +569,17 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
 		sensor_data->RGBIR=apds9250_measure(200, &ok);
 		if (flags==2) {// There is a memory chip on board
-		    //save data
+			// If there is a memory chip on board, write the datapackage to the memory
+			uint8_t mempacked_data[WORKMODE_102_RECORD];	
+			pack_sensor_record_17byte(sensor_data, mempacked_data);
+			if (eeprom_record_write(mempacked_data)) {
+				LOG_PRINTF(LL_DEBUG, "Record written\r\n");
+			} else {
+				LOG_PRINTF(LL_ERR, "Record write failed\r\n");
+			}
+
+			
+			
 		}
 
 	}

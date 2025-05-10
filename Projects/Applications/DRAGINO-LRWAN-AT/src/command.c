@@ -26,6 +26,7 @@
 #include "bsp.h"
 #include "weight.h"
 #include "pwm.h"
+#include "eeprom_record.h"
 
 #define ARGC_LIMIT 16
 #define ATCMD_SIZE (242 * 2 + 18)
@@ -191,6 +192,8 @@ static int at_disfcntcheck_func(int opt, int argc, char *argv[]);
 static int at_dismacans_func(int opt, int argc, char *argv[]);
 static int at_rxdatatest_func(int opt, int argc, char *argv[]);
 
+static int at_rec_func(int opt, int argc, char *argv[]);
+
 static at_cmd_t g_at_table[] = {
 	  {AT_DEBUG, at_debug_func},
 		{AT_RESET, at_reset_func},
@@ -258,6 +261,9 @@ static at_cmd_t g_at_table[] = {
 		{AT_DISFCNTCHECK, at_disfcntcheck_func},		
 		{AT_DISMACANS, at_dismacans_func},
 		{AT_RXDATEST,at_rxdatatest_func},
+		{AT_REC,at_rec_func}, //DaBaScientific
+		
+		
 };
 
 #define AT_TABLE_SIZE	(sizeof(g_at_table) / sizeof(at_cmd_t))
@@ -2545,17 +2551,20 @@ static int at_mod_func(int opt, int argc, char *argv[])
         
             value = strtol((const char *)argv[0], NULL, 0);
 					
-					  if((value>=1)&&(value<=11))
+					  if( ((value>=1)&&(value<=11)) || ((value>=101)&&(value<=102)) )
 						{
 							workmode=value;		
               LOG_PRINTF(LL_DEBUG,"Attention:Take effect after ATZ\r\n");							
 							ret = LWAN_SUCCESS;
 							write_config_in_flash_status=1;
 							atcmd[0] = '\0';
+							if ((value>=101)&&(value<=102)){
+								init_record_storage(workmode);  // Initialize the Memory and resets record counter.
+							}
             }
 						else
 						{
-							LOG_PRINTF(LL_DEBUG,"Mode of range is 1 to 11\r\n");		
+							LOG_PRINTF(LL_DEBUG,"Mode of range is 1 to 11, DaBaScientific Extensions boards on 101 and 102\r\n");		
 							ret = LWAN_PARAM_ERROR;
 						}
             break;
@@ -3627,4 +3636,112 @@ void weightreset(void)
 	WEIGHT_SCK_DeInit();
 	WEIGHT_DOUT_DeInit();		
 	POWER_IoDeInit();
+}
+
+/**
+ * @brief AT command handler for printing EEPROM-stored records.
+ *
+ * Supported formats:
+ *   AT+REC=-1           ? Print latest record
+ *   AT+REC=-300:-10     ? Print records from -300 to -10 (relative, newest is -1)
+ *   AT+REC=ALL          ? Print all valid records from oldest to newest
+ *   AT+REC=N            ? Print the number of stored records
+ *
+ * Transmit timers are temporarily stopped during output to prevent
+ * interference from LoRaWAN events. They are resumed afterward.
+ *
+ * @param opt   AT command option (EXECUTE_CMD or DESC_CMD)
+ * @param argc  Number of arguments passed with command
+ * @param argv  Array of argument strings
+ * @return LWAN_SUCCESS if successful, LWAN_PARAM_ERROR otherwise
+ */
+static int at_rec_func(int opt, int argc, char *argv[])
+{
+    int ret = LWAN_PARAM_ERROR;
+
+    if (opt == EXECUTE_CMD)
+    {
+        // AT+REC=N ? Show number of stored records
+        if (argc == 1 && strcmp(argv[0], "N") == 0)
+        {
+            uint32_t count = eeprom_record_count();
+            LOG_PRINTF(LL_DEBUG, "Stored records: %lu\r\n", count);
+            return LWAN_SUCCESS;
+        }
+
+        // Stop transmission timers to avoid TX interfering with output
+        TimerStop(&MacStateCheckTimer);
+        TimerStop(&TxDelayedTimer);
+        TimerStop(&AckTimeoutTimer);
+        TimerStop(&RxWindowTimer1);
+        TimerStop(&RxWindowTimer2);
+        TimerStop(&TxTimer);
+        TimerStop(&ReJoinTimer);
+
+        LOG_PRINTF(LL_DEBUG, "\r\n--- Printing EEPROM records (TX paused) ---\r\n");
+
+        // AT+REC=ALL ? print all valid records from oldest to newest
+        if (argc == 1 && strcmp(argv[0], "ALL") == 0)
+        {
+            uint32_t count = eeprom_record_count();
+            uint32_t total = record_cfg.total_records;
+            uint32_t next_index = (record_cfg.next_write_addr - record_cfg.base_addr) / record_cfg.record_size;
+            uint32_t start_index = (next_index + total - count) % total;
+
+            for (uint32_t i = 0; i < count; i++) {
+                uint32_t index = (start_index + i) % total;
+                uint8_t buf[record_cfg.record_size];
+                if (eeprom_record_read(index, buf))
+                    eeprom_record_print_hex(buf);
+            }
+
+            ret = LWAN_SUCCESS;
+        }
+
+        // AT+REC=-1 ? print single record using relative index
+        else if (argc == 1 && strchr(argv[0], ':') == NULL)
+        {
+            int32_t rel_index = atoi(argv[0]);
+
+            uint8_t buf[record_cfg.record_size];
+            if (eeprom_record_read_relative(rel_index, buf)) {
+                eeprom_record_print_hex(buf);
+                ret = LWAN_SUCCESS;
+            }
+        }
+
+        // AT+REC=-300:-10 ? print range using relative indexing
+        else if (argc == 1 && strchr(argv[0], ':') != NULL)
+        {
+            char* colon = strchr(argv[0], ':');
+            *colon = '\0';  // Split into two strings
+            int32_t start = atoi(argv[0]);
+            int32_t end = atoi(colon + 1);
+
+            for (int32_t i = start; i <= end; i++) {
+                uint8_t buf[record_cfg.record_size];
+                if (eeprom_record_read_relative(i, buf))
+                    eeprom_record_print_hex(buf);
+            }
+
+            ret = LWAN_SUCCESS;
+        }
+
+        // Resume timers
+        if (LORA_JoinStatus() == LORA_SET) {
+            TimerStart(&TxTimer);
+            LOG_PRINTF(LL_DEBUG, "\r\n--- Resuming TX (joined) ---\r\n");
+        } else if (joined_flags == 0) {
+            TimerStart(&TxDelayedTimer);
+            LOG_PRINTF(LL_DEBUG, "\r\n--- Resuming TX (unjoined) ---\r\n");
+        }
+    }
+    else if (opt == DESC_CMD)
+    {
+        snprintf((char *)atcmd, ATCMD_SIZE,
+                 "Print EEPROM records: AT+REC=-1 | -N:M | ALL | N");
+        ret = LWAN_SUCCESS;
+    }
+
+    return ret;
 }
