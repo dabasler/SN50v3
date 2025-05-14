@@ -16,7 +16,7 @@ typedef struct {
 bool apds9250_init(void);
 uint8_t check_apds9250_connect(void);
 bool apds9250_read_raw(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *ir, uint32_t timeout_ms);
-uint64_t apds9250_measure(uint32_t timeout_ms, bool* success);
+uint64_t apds9250_measure(uint32_t timeout_ms);
 bool apds9250_sleep(void);
 void apds9250_unpack(uint64_t packed, apds9250_t* data, uint8_t* gain_out);
 

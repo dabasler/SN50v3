@@ -138,14 +138,14 @@ extern "C" {
 #define DX_BT24_LINK_PIN    	  GPIO_PIN_1 
 #define DX_BT24_WORK_PIN    	  GPIO_PIN_5 
 
-/* ---------------------------  LTC2485_pin definition -------------------------------*/
-#define LTC2485_VX_CLK_ENABLE()     rcc_enable_peripheral_clk(RCC_PERIPHERAL_GPIOC, true)
-#define LTC2485_VX_PORT         GPIOC	
-#define LTC2485_VX_PIN    	  	GPIO_PIN_13 
-#define LTC2485_BLOCK_CLK_ENABLE()  rcc_enable_peripheral_clk(RCC_PERIPHERAL_GPIOB, true)
-#define LTC2485_BLOCK_PORT      GPIOB	
-#define LTC2485_BLOCK_PIN1     	GPIO_PIN_9
-#define LTC2485_BLOCK_PIN2    	GPIO_PIN_8
+/* ---------------------------  DABA_Extension_Board_pin definition -------------------------------*/
+#define DABAEXT_VX_CLK_ENABLE()     rcc_enable_peripheral_clk(RCC_PERIPHERAL_GPIOC, true)
+#define DABAEXT_VX_PORT         GPIOC	
+#define DABAEXT_VX_PIN    	  	GPIO_PIN_13 
+#define DABAEXT_BLOCK_CLK_ENABLE()  rcc_enable_peripheral_clk(RCC_PERIPHERAL_GPIOB, true)
+#define DABAEXT_BLOCK_PORT      GPIOB	
+#define DABAEXT_BLOCK_PIN1     	GPIO_PIN_9
+#define DABAEXT_BLOCK_PIN2    	GPIO_PIN_8
 
 
 

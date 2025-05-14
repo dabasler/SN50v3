@@ -1,6 +1,7 @@
 #include "ltc2485.h"
 #include "I2C_A.h"
 #include "lora_config.h"
+#include "log.h"
 
 // --- Internal helpers ---
 
@@ -26,8 +27,8 @@ static bool data_ready(uint8_t status_byte) {
  *
  * @param enable Set to true to enable power (drive pin low), false to disable (drive pin high)
  */
-static void ltc2485_set_vx(bool enable) {
-    gpio_write(LTC2485_VX_PORT, LTC2485_VX_PIN, enable ? 0 : 1);
+void ltc2485_set_vx(bool enable) {
+    gpio_write(DABAEXT_VX_PORT, DABAEXT_VX_PIN, enable ? 0 : 1);
 }
 
 // --- Public API ---
@@ -59,19 +60,24 @@ uint8_t check_ltc2485_connect(void) {
  * of the positive conversion result.
  *
  * The result is right-aligned by removing the 7 sub-LSB bits and sign bit, leaving
- * a clean 24-bit unsigned integer suitable for compact encoding in LoRa payloads.
+ * a clean 24-bit integer suitable for compact encoding in LoRa payloads.
  *
- * @param[out] raw_code    Pointer to store the 24-bit unsigned result (stored in a uint32_t)
  * @param[in]  timeout_ms  Timeout in milliseconds for conversion completion
- * @return true if successful and result is non-negative, false on I2C failure, timeout,
- *         or if the ADC result was negative.
+ * @return the ADC result or 0xFFFFFFFF if something went wrong.
  */
  
-bool ltc2485_read_raw(uint32_t *raw_code, uint32_t timeout_ms) {
+int32_t ltc2485_read_adc(uint32_t timeout_ms) {
     uint8_t buffer[4];
     uint32_t elapsed = 0;
-
-    do {
+	uint32_t value = 0;
+	
+	
+   if (!ltc2485_write_byte(0x00)) {
+		//LOG_PRINTF(LL_DEBUG, "ltc2485: no response\r\n");
+        return 0xFFFFFFFF;}
+	
+	delay_ms(200);  // Wait for internal conversion
+	do {
         if (!ltc2485_read_bytes(buffer, 4))
             return false;
         if (data_ready(buffer[0]))
@@ -80,64 +86,35 @@ bool ltc2485_read_raw(uint32_t *raw_code, uint32_t timeout_ms) {
         elapsed += 10;
     } while (elapsed < timeout_ms);
 
-    if (!data_ready(buffer[0]))
-        return false;
-
-
-
+    if (!data_ready(buffer[0])){
+		//LOG_PRINTF(LL_DEBUG, "ltc2485: data not ready\r\n");
+		return 0xFFFFFFFF;}
+ 
     uint32_t raw = ((uint32_t)buffer[0] << 24) |
                    ((uint32_t)buffer[1] << 16) |
                    ((uint32_t)buffer[2] << 8) |
                    ((uint32_t)buffer[3]);
+	
+	LOG_PRINTF(LL_DEBUG, "ltc2485: raw 0x%08luX (hex)\r\n", raw);
+	// Check over-range: SIG=1, MSB=1
+	if (((raw >> 30) & 0x3) == 0x3) {
+		//LOG_PRINTF(LL_DEBUG, "Overrange\r\n");
+		return 0x7FFFFFFF;
+	}
 
-    if (raw & 0x80000000)  // Sign bit set
-        return false;      // Negative value, discard
-
-    // Shift off sign bit and sub-LSBs ? 24-bit unsigned positive result
-    *raw_code = (raw >> 7) & 0xFFFFFF;
-
-
-    return ltc2485_sleep();
+	// Check under-range: SIG=0, MSB=0
+	if (((raw >> 30) & 0x3) == 0x0) {
+		//LOG_PRINTF(LL_DEBUG, "Underrange\r\n");
+		return 0x80000000;
+	}
+	// Flip sign bit to convert from offset binary to two's complement
+    raw ^= 0x80000000;
+    // Convert to signed 32-bit and right shift to discard status bits (7 bits)
+	value = ((int32_t)raw) >> 7;
+	//LOG_PRINTF(LL_DEBUG, "ltc2485: vaule 0x%06lX (hex)\r\n", value);
+    return value;
 }
 
-bool ltc2485_sleep(void) {
-    return ltc2485_write_byte(0x00);
-}
-
-
-
-/**
- * @brief Perform a single LTC2485 ADC measurement (positive-only, 24-bit).
- *
- * This function powers up the LTC2485 using the Vx control pin, waits for
- * analog settling, performs a measurement with timeout, powers down Vx again,
- * and returns the raw ADC result.
- *
- * Only positive 24-bit ADC values are supported. Negative readings are discarded.
- *
- * @param[in]  timeout_ms   Timeout for ADC data-ready polling
- * @param[out] success      Optional output flag to indicate success (true) or failure (false)
- * @return 24-bit unsigned ADC result (0 if failed or negative)
- */
-uint32_t ltc2485_measure_once(uint32_t timeout_ms, bool* success)
-{
-    uint32_t raw_code = 0;
-
-    ltc2485_set_vx(true);        // Power on
-    delay_ms(40);                // Allow analog input and reference to settle
-
-    bool ok = ltc2485_read_raw(&raw_code, timeout_ms);
-
-    ltc2485_set_vx(false);       // Always power off after attempt
-
-    if (!ok) {
-        if (success) *success = false;
-        return 0;                // Return 0 if read failed
-    }
-
-    if (success) *success = true;
-    return raw_code;
-}
 
 
 /**
@@ -153,55 +130,44 @@ uint32_t ltc2485_measure_once(uint32_t timeout_ms, bool* success)
  * @param[in]  timeout_ms  Timeout in milliseconds for conversion completion
  * @return true if successful, false if I2C error or data not ready
  */
-bool ltc2485_read_temperature_raw(int32_t *adc_code, uint32_t timeout_ms)
+float ltc2485_read_temperature(uint16_t vref, uint32_t timeout_ms)
 {
-    if (!ltc2485_write_byte(0xC0))
-        return false;
+    if (!ltc2485_write_byte(0x08)){
+		//LOG_PRINTF(LL_DEBUG, "ltc2485: no response\r\n");
+        return -99;
+		}
 
-    delay_ms(150);  // Wait for internal conversion
+    delay_ms(200);  // Wait for internal conversion
 
     uint8_t buffer[4];
-    if (!ltc2485_read_bytes(buffer, 4))
-        return false;
+    if (!ltc2485_read_bytes(buffer, 4)) {
+		//LOG_PRINTF(LL_DEBUG, "ltc2485: data not ready\r\n");
+        return -99;
+		}
 
-    if (!data_ready(buffer[0]))
-        return false;
+    if (!data_ready(buffer[0])) {
+		//LOG_PRINTF(LL_DEBUG, "ltc2485: no valid data\r\n");
+		return -99;
+	}
+        
 
     uint32_t raw = ((uint32_t)buffer[0] << 24) |
                    ((uint32_t)buffer[1] << 16) |
                    ((uint32_t)buffer[2] << 8) |
                    ((uint32_t)buffer[3]);
-
-    // Sign-extend 25-bit ADC result: left-align then arithmetic right shift
-    *adc_code = (int32_t)(raw << 1) >> 7;
-
-    return ltc2485_sleep();
+	//LOG_PRINTF(LL_DEBUG, "ltc2485: PTAT raw 0x%08luX (hex)\r\n", raw);
+    raw ^= 0x80000000;
+	float mV = (float)raw * (vref / 2147483648.0);  // 2^31
+	//LOG_PRINTF(LL_DEBUG, "ltc2485: PTAT %.2f mV\r\n", mV);
+	// Temperature calculation (from LTC2485 datasheet, p.20)
+	const float LTC2485_TAVERAGE       = 27.0;    //  °C
+	const float LTC2485_MVOLT_TAVERAGE = 420.0;   //  mV
+	const float LTC2485_SLOPE          = 1.40;    //  mV/°C
+    float TC = LTC2485_TAVERAGE + (mV - LTC2485_MVOLT_TAVERAGE) / LTC2485_SLOPE;
+	//LOG_PRINTF(LL_DEBUG, "ltc2485: PTAT %.2f C\r\n", TC);
+    return TC;	
 }
 
-/**
- * @brief Measures and converts the LTC2485 internal temperature to °C.
- *
- * This function initiates a temperature conversion, reads the signed
- * ADC code, converts it into voltage based on the given VREF, and
- * applies the typical PTAT transfer function:
- *
- *   Vtemp = 420 mV at 27 °C
- *   Slope  ˜ 1.4 mV/°C
- *
- *   Temp(°C) = 27 + (Vadc - 0.420) / 0.0014
- *
- * @param[in] vref Reference voltage used by LTC2485 (e.g., 2.5V)
- * @return Temperature in °C if successful, or -99 on failure
- */
-float ltc2485_temperature(float vref)
-{
-    int32_t adc_code;
-    if (!ltc2485_read_temperature_raw(&adc_code, 200))
-        return -99;  // Measurement failed
-
-    float voltage = ((float)adc_code * vref) / 16777216.0f; // 2^24
-    return 27.0f + ((voltage - 0.420f) / 0.0014f);
-}
 
 //see definitions in: lora_config.h
 // Terminal   PIN   Function
@@ -209,19 +175,19 @@ float ltc2485_temperature(float vref)
 // Pin 4:     SLC
 // Pin 5:     SDA
 // Pin 6:     PC13  ENABE VX Active low
-// Pin 7:     PB9   NOT USED  (monitor VX)// Set High Impedance set Input, no Pullup
+// Pin 7:     PB9   NOT USED; Just use the terminal to deliver VX// Set High Impedance set Input, no Pullup
 // Pin 8:     PB8   EXT ADC // Set High Impedance no Pullup
 
 void ltc2485_control_gpio_init(void) {
-    LTC2485_VX_CLK_ENABLE();
-    LTC2485_BLOCK_CLK_ENABLE();
+    DABAEXT_VX_CLK_ENABLE();
+    DABAEXT_BLOCK_CLK_ENABLE();
 
-    gpio_set_iomux(LTC2485_VX_PORT, LTC2485_VX_PIN, 0);
-    gpio_init(LTC2485_VX_PORT, LTC2485_VX_PIN, GPIO_MODE_OUTPUT_PP_HIGH); //EN is active low
+    gpio_set_iomux(DABAEXT_VX_PORT, DABAEXT_VX_PIN, 0);
+    gpio_init(DABAEXT_VX_PORT, DABAEXT_VX_PIN, GPIO_MODE_OUTPUT_PP_HIGH); //EN is active low
 
-    gpio_set_iomux(LTC2485_BLOCK_PORT, LTC2485_BLOCK_PIN1, 0);
-    gpio_init(LTC2485_BLOCK_PORT, LTC2485_BLOCK_PIN1, GPIO_MODE_INPUT_FLOATING);
+    gpio_set_iomux(DABAEXT_BLOCK_PORT, DABAEXT_BLOCK_PIN1, 0);
+    gpio_init(DABAEXT_BLOCK_PORT, DABAEXT_BLOCK_PIN1, GPIO_MODE_INPUT_FLOATING);
 
-    gpio_set_iomux(LTC2485_BLOCK_PORT, LTC2485_BLOCK_PIN2, 0);
-    gpio_init(LTC2485_BLOCK_PORT, LTC2485_BLOCK_PIN2, GPIO_MODE_INPUT_FLOATING);
+    gpio_set_iomux(DABAEXT_BLOCK_PORT, DABAEXT_BLOCK_PIN2, 0);
+    gpio_init(DABAEXT_BLOCK_PORT, DABAEXT_BLOCK_PIN2, GPIO_MODE_INPUT_FLOATING);
 }

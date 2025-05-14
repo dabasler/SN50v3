@@ -562,14 +562,14 @@ void fdr_config(void)
 	dwelltime=1;
 	#endif
   			
-	workmode=1;	
+	workmode=101;	//DaBa: Default for ExtensionBoard
   power_5v_time=500;	
 	inmode=2;		
 	inmode2=2;		
 	inmode3=2;
   GapValue=400.0;	
 	APP_TX_DUTYCYCLE=1200000;
-	REJOIN_TX_DUTYCYCLE=20;//min
+	REJOIN_TX_DUTYCYCLE=10;//min DaBa:changed from 20 min
 	if(password_default(password_get)==0)  //default 123456
 	{
 		password_len=3;

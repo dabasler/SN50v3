@@ -6,14 +6,18 @@
 #include <tremo_delay.h>
 
 #include "bsp.h"
+#include "log.h"
 
 // LTC2485 I2C address (CA1 = LOW, CA0 = HIGH)
 
-#define LTC2485_I2C_ADDR  0x28
+#define LTC2485_I2C_ADDR  0x14 //Global Address 0x77
+//define LTC2485_I2C_ADDR  0x14
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void ltc2485_set_vx(bool enable);
 
 /**
  * @brief Initialize GPIO pins used for LTC2485 control.
@@ -28,12 +32,11 @@ bool ltc2485_init(void);
 
 uint8_t check_ltc2485_connect(void);
 
-bool ltc2485_read_raw(uint32_t *raw_code, uint32_t timeout_ms);
+int32_t ltc2485_read_adc(uint32_t timeout_ms);
 
-uint32_t ltc2485_measure_once(uint32_t timeout_ms, bool* success);
-bool ltc2485_read_temperature_raw(int32_t *adc_code, uint32_t timeout_ms);
-float ltc2485_temperature(float vref);
-bool ltc2485_sleep(void);
+
+float ltc2485_read_temperature(uint16_t vref, uint32_t timeout_ms);
+
 
 #ifdef __cplusplus
 }

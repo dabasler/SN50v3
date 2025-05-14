@@ -199,9 +199,9 @@ void BSP_sensor_Init( void  )
 	 
 	 // ********************************************************************************
 	 if(workmode==101){
-	    
+	    I2C_GPIO_MODE_Config();
 		ltc2485_init(); // Defines Pins and setx VX low		
-		I2C_GPIO_MODE_Config();
+		delay_ms(200);
 		if(check_ltc2485_connect()==1)
 		 {
 			 flags=1;
@@ -227,8 +227,10 @@ void BSP_sensor_Init( void  )
 	 }
 	
 	if(workmode==102){
-
 	I2C_GPIO_MODE_Config();
+	ltc2485_init(); // Defines Pins and setx VX low		
+	ltc2485_set_vx(true); //Power the external module
+	delay_ms(150);
 		if(check_ltc2485_connect()==1)
 		 {
 			 flags=1;
@@ -265,6 +267,8 @@ void BSP_sensor_Init( void  )
 			 delay_ms(20);
 		 }
 
+	ltc2485_set_vx(false);
+	I2C_GPIO_MODE_ANALOG();	
 
 	 }
 	 // ********************************************************************************
@@ -544,12 +548,42 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 	}	
   if(mod_temp==101) // Internal I2C ACD Extension
 	{
-		bool ok;
+		
+	I2C_GPIO_MODE_Config();
+	ltc2485_init(); 	     // Defines Pins and setx VX low
+	delay_ms(2);
+	ltc2485_set_vx(true);   //  Power the external module
+	delay_ms(200);
+	uint16_t bat_mv=battery_voltage_measurement();
+	int32_t adc = ltc2485_read_adc(200);
+	delay_ms(200);
+	
+	float temp1 = ltc2485_read_temperature(bat_mv, 200);
+	LOG_PRINTF(LL_DEBUG, "BATT: %d mV\r\n", bat_mv);
+	LOG_PRINTF(LL_DEBUG, "ADC_convert_24bit: %ld (decimal)\r\n", adc);
+	LOG_PRINTF(LL_DEBUG, "ADC_convert_24bit: 0x%06lX (hex)\r\n", adc);
+	LOG_PRINTF(LL_DEBUG, "Temp1: %.2f C\r\n", temp1);
+	ltc2485_set_vx(false);       // Always power off after attempt
+	sensor_data->ADC_ext_24bit=adc;
+	sensor_data->temp1=temp1;
+
+	//I2C_GPIO_MODE_ANALOG();
+
+		
+		
+		
+		/*
+		
+		ltc2485_init(); // Defines Pins and setx VX low		
 		ltc2485_set_vx(true);        // VX Power on
-		delay_ms(40);                // Allow analog input and reference to settle
-		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
-		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
+		// Wait 2ms after enabling VX to allow RC filter (R=1k, C=0.1uF) to settle.
+		// Ensures accurate ADC reading from 10k potentiometer (worst-case 3.5kO source impedance).
+		// 5×RC ˜ 1.75ms; 2ms provides safe margin for full voltage stabilization.
+		delay_ms(200);                // Allow analog input and reference to settle		
+		sensor_data->ADC_ext_24bit=ltc2485_read_adc(200);
+		sensor_data->temp1=ltc2485_read_temperature(sensor_data->bat_mv, 200);
 		ltc2485_set_vx(false);       // Always power off after attempt
+		*/
 		if (flags==2) {
 			// If there is a memory chip on board, write the datapackage to the memory
 			uint8_t mempacked_data[WORKMODE_101_RECORD];	
@@ -563,16 +597,16 @@ void BSP_sensor_Read( sensor_t *sensor_data , uint8_t message ,uint8_t mod_temp)
 		}
 
 	}		
-   if(mod_temp==111) // External I2C sensor Board (incl RH/T and RGBIR)
+   if(mod_temp==102) // External I2C sensor Board (incl RH/T and RGBIR)
 	{
 	
 		ltc2485_set_vx(true);        // this enables the full powersupply of the external board incl. VX
-		delay_ms(100);               // Allow analog input and reference to settle
-		bool ok;
-		I2C_read_data(sensor_data,4,message); // 4 is the SHT4x flag
-		sensor_data->temp1=ltc2485_temperature(sensor_data->bat_mv);
-		sensor_data->ADC_ext_24bit= ltc2485_measure_once(200, &ok);
-		sensor_data->RGBIR=apds9250_measure(200, &ok);
+		delay_ms(200);                // Allow analog input and reference to settle
+		sensor_data->ADC_ext_24bit=ltc2485_read_adc(200);
+		delay_ms(200);                // Allow analog input and reference to settle
+		
+		sensor_data->temp1=ltc2485_read_temperature(sensor_data->bat_mv, 200);
+		sensor_data->RGBIR=apds9250_measure(200);
 		if (flags==2) {// There is a memory chip on board
 			// If there is a memory chip on board, write the datapackage to the memory
 			uint8_t mempacked_data[WORKMODE_102_RECORD];	

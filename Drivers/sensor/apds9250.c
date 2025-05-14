@@ -129,12 +129,13 @@ bool apds9250_read_raw(uint32_t *r, uint32_t *g, uint32_t *b, uint32_t *ir, uint
  * @return 64-bit packed result containing gain and color channel data;
  *         0xFFFFFFFFFFFFFFFF if measurement failed
  */
-uint64_t apds9250_measure(uint32_t timeout_ms, bool* success) {
+uint64_t apds9250_measure(uint32_t timeout_ms) {
 
+	bool ok;
 	apds9250_init();
     uint32_t r, g, b, ir;
-    *success = apds9250_read_raw(&r, &g, &b, &ir, timeout_ms);
-    if (!*success)
+    ok=apds9250_read_raw(&r, &g, &b, &ir, timeout_ms);
+    if (!ok)
         return 0xFFFFFFFFFFFFFFFF;
 
     uint64_t packed = 0;

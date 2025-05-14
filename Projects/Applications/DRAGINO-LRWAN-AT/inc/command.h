@@ -86,6 +86,8 @@
 #define AT_DISMACANS 	   	  "+DISMACANS"
 #define AT_RXDATEST  			  "+RXDATEST"
 #define AT_REC        "+REC" 
+#define AT_DBDBG        "+DBDBG" 
+#define AT_I2C        "+I2C" 
 
 void set_at_receive(uint8_t AppPort, uint8_t* Buff, uint8_t BuffSize);
 void linkwan_at_init(void);

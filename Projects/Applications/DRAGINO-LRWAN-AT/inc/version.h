@@ -68,7 +68,7 @@ Maintainer: Miguel Luis, Gregory Cristian and Wael Guibene
    
 /* Includes ------------------------------------------------------------------*/
 
-#define AT_VERSION_STRING	"v1.3"
+#define AT_VERSION_STRING	"v1.3 Extended"
 #define AT_LoRaWan_VERSION_STRING	"DR-LWS-007" 
 	 
 /* Exported types ------------------------------------------------------------*/

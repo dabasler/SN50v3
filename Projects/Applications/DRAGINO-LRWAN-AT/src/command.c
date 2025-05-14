@@ -26,7 +26,14 @@
 #include "bsp.h"
 #include "weight.h"
 #include "pwm.h"
+
+#include "ltc2485.h"
+#include "apds9250.h"
+#include "m24m02e.h"
 #include "eeprom_record.h"
+#include "I2C_A.h"
+#include "I2C_sensor.h"
+
 
 #define ARGC_LIMIT 16
 #define ATCMD_SIZE (242 * 2 + 18)
@@ -193,6 +200,8 @@ static int at_dismacans_func(int opt, int argc, char *argv[]);
 static int at_rxdatatest_func(int opt, int argc, char *argv[]);
 
 static int at_rec_func(int opt, int argc, char *argv[]);
+static int at_dbdbg_func(int opt, int argc, char *argv[]);
+static int at_i2c_func(int opt, int argc, char *argv[]);
 
 static at_cmd_t g_at_table[] = {
 	  {AT_DEBUG, at_debug_func},
@@ -262,6 +271,8 @@ static at_cmd_t g_at_table[] = {
 		{AT_DISMACANS, at_dismacans_func},
 		{AT_RXDATEST,at_rxdatatest_func},
 		{AT_REC,at_rec_func}, //DaBaScientific
+		{AT_DBDBG,at_dbdbg_func}, //DaBaScientific
+		{AT_I2C,at_i2c_func} //DaBaScientific
 		
 		
 };
@@ -3668,7 +3679,6 @@ static int at_rec_func(int opt, int argc, char *argv[])
             LOG_PRINTF(LL_DEBUG, "Stored records: %lu\r\n", count);
             return LWAN_SUCCESS;
         }
-
         // Stop transmission timers to avoid TX interfering with output
         TimerStop(&MacStateCheckTimer);
         TimerStop(&TxDelayedTimer);
@@ -3677,9 +3687,7 @@ static int at_rec_func(int opt, int argc, char *argv[])
         TimerStop(&RxWindowTimer2);
         TimerStop(&TxTimer);
         TimerStop(&ReJoinTimer);
-
         LOG_PRINTF(LL_DEBUG, "\r\n--- Printing EEPROM records (TX paused) ---\r\n");
-
         // AT+REC=ALL ? print all valid records from oldest to newest
         if (argc == 1 && strcmp(argv[0], "ALL") == 0)
         {
@@ -3697,7 +3705,6 @@ static int at_rec_func(int opt, int argc, char *argv[])
 
             ret = LWAN_SUCCESS;
         }
-
         // AT+REC=-1 ? print single record using relative index
         else if (argc == 1 && strchr(argv[0], ':') == NULL)
         {
@@ -3709,7 +3716,6 @@ static int at_rec_func(int opt, int argc, char *argv[])
                 ret = LWAN_SUCCESS;
             }
         }
-
         // AT+REC=-300:-10 ? print range using relative indexing
         else if (argc == 1 && strchr(argv[0], ':') != NULL)
         {
@@ -3723,10 +3729,8 @@ static int at_rec_func(int opt, int argc, char *argv[])
                 if (eeprom_record_read_relative(i, buf))
                     eeprom_record_print_hex(buf);
             }
-
             ret = LWAN_SUCCESS;
         }
-
         // Resume timers
         if (LORA_JoinStatus() == LORA_SET) {
             TimerStart(&TxTimer);
@@ -3744,4 +3748,63 @@ static int at_rec_func(int opt, int argc, char *argv[])
     }
 
     return ret;
+}
+
+uint8_t I2C_Probe_Addr(uint8_t addr);
+uint8_t I2C_Probe_Addr(uint8_t addr)
+{
+    I2C_Start();
+    I2C_SendByte((addr << 1) | 1);  // Write mode
+    if (I2C_WaitAck()) {
+        I2C_Stop();
+        return 1;  // NACK
+    }
+    I2C_Stop();
+    return 0;  // ACK received
+}
+
+
+static int at_i2c_func(int opt, int argc, char *argv[])
+{
+	ltc2485_set_vx(true); //Power the external module
+	I2C_GPIO_MODE_Config();
+	delay_ms(200);
+    LOG_PRINTF(LL_DEBUG, "\r\n Starting I2C scan...\r\n");
+    I2C_GPIO_MODE_Config();
+    uint8_t found = 0;
+    for (uint8_t addr = 0x03; addr <= 0x77; addr++) {
+	    LOG_PRINTF(LL_DEBUG, "Testing Address 0x%02X\r\n", addr);    
+        if (I2C_Probe_Addr(addr) == 0) {
+            LOG_PRINTF(LL_DEBUG, "I2C device found at 0x%02X\r\n", addr);
+            found = 1;
+            delay_ms(10);
+        }
+    }
+    if (!found) {
+        LOG_PRINTF(LL_DEBUG, "No I2C devices found.\r\n");
+    }
+    I2C_GPIO_MODE_ANALOG();
+    return 1;
+}
+
+
+static int at_dbdbg_func(int opt, int argc, char *argv[])
+{
+	I2C_GPIO_MODE_Config();
+	ltc2485_init(); 	     // Defines Pins and setx VX low
+	delay_ms(2);
+	ltc2485_set_vx(true);   //  Power the external module
+	delay_ms(200);
+	uint16_t bat_mv=battery_voltage_measurement();
+	int32_t adc = ltc2485_read_adc(200);
+	delay_ms(200);
+	
+	float temp1 = ltc2485_read_temperature(bat_mv, 200);
+	LOG_PRINTF(LL_DEBUG, "BATT: %d mV\r\n", bat_mv);
+	LOG_PRINTF(LL_DEBUG, "ADC_convert_24bit: %ld (decimal)\r\n", adc);
+	LOG_PRINTF(LL_DEBUG, "ADC_convert_24bit: 0x%06lX (hex)\r\n", adc);
+	LOG_PRINTF(LL_DEBUG, "Temp1: %.2f C\r\n", temp1);
+	ltc2485_set_vx(false);       // Always power off after attempt
+	I2C_GPIO_MODE_ANALOG();
+    return 1;
 }
